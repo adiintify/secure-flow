@@ -1,0 +1,71 @@
+name: Python Security Scan, SBOM Generation, and PR Handling
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+jobs:
+  bandit-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: '3.x'
+      - name: Install Bandit
+        run: pip install bandit
+      - name: Run Bandit security scan
+        run: bandit -r . -lll --format json --output bandit_output.json
+      - name: Check for HIGH severity issues
+        id: check_high
+        run: |
+          if grep -q '"issue_severity": "HIGH"' bandit_output.json; then
+            echo "High severity issues found"
+            echo "::set-output name=block_pr::true"
+          else
+            echo "No high severity issues found"
+            echo "::set-output name=block_pr::false"
+          fi
+      - name: Comment on PR if blocked
+        if: steps.check_high.outputs.block_pr == 'true'
+        uses: actions/github-script@v5
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: 'Block - Critical or above vulnerability identified.'
+            })
+            core.setFailed('Blocking PR due to critical vulnerabilities.');
+
+      - name: Comment on PR if successful
+        if: steps.check_high.outputs.block_pr == 'false'
+        uses: actions/github-script@v5
+        with:
+          script: |
+            github.rest.issues.createComment({
+              issue_number: context.issue.number,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              body: 'Successful - No critical or high severity issues found.'
+            })
+
+  sbom-generation:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: bandit-scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v2
+      - name: Install Syft
+        run: curl -sSfL https://raw.githubusercontent.com/anchore/syft/main/install.sh | sh -s -- -b /usr/local/bin
+      - name: Generate SBOM with Syft
+        run: syft packages dir:. -o cyclonedx-json=sbom.json
+      - name: Upload SBOM as an artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: SBOM
+          path: sbom.json
