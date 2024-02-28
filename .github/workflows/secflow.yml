@@ -23,24 +23,33 @@ jobs:
       - name: Run Bandit security scan
         run: bandit -r . -lll || true
 
-      - name: Comment on PR based on Bandit result
+      - name: Comment based on Bandit scan result
         uses: actions/github-script@v5
         with:
           script: |
-            const prNumber = github.context.issue.number || github.context.payload.pull_request?.number;
+            const issueNumber = github.context.payload.issue?.number;
+            const prNumber = github.context.payload.pull_request?.number;
             const repoOwner = github.context.repo.owner;
             const repoName = github.context.repo.repo;
-            let message = "High severity issues found. Please review the Bandit scan results.";
 
-            if (prNumber) {
+            const commentBody = `High severity issues found. Please review the Bandit scan results.`;
+
+            // Function to post a comment
+            async function postComment(issueOrPrNumber) {
               await github.rest.issues.createComment({
                 owner: repoOwner,
                 repo: repoName,
-                issue_number: prNumber,
-                body: message
+                issue_number: issueOrPrNumber,
+                body: commentBody
               });
+            }
+
+            if (issueNumber) {
+              await postComment(issueNumber);
+            } else if (prNumber) {
+              await postComment(prNumber);
             } else {
-              console.log("No PR or Issue number found. Skipping comment.");
+              console.log('No issue or pull request context found.');
             }
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
