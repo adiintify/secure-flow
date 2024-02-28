@@ -18,7 +18,7 @@ jobs:
       - name: Install Bandit
         run: pip install bandit
       - name: Run Bandit security scan
-        run: bandit -r . -lll
+        run: bandit -r . -lll || true
       - name: Check for HIGH severity issues
         id: check_high
         run: |
