@@ -4,8 +4,6 @@
 
 This repository contains a Python application intentionally designed to be vulnerable, specifically for educational purposes and to demonstrate automated security scanning and pull request handling within a CI/CD pipeline using GitHub Actions. It incorporates security scanning with Bandit for Python code, automated pull request reviews based on scan results, and GitHub Advanced Security features.
 
-**Warning**: The code in this repository is intentionally vulnerable and should **not** be used in production environments or as a base for developing applications. It is designed strictly for educational and testing purposes.
-
 ## Automated Security Scanning
 
 This project uses GitHub Actions to automate security scanning on every pull request. The workflow includes:
