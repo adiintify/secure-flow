@@ -1,4 +1,4 @@
-name: PR Workflow
+name: Bandit and SBOM
 
 on:
   pull_request:
