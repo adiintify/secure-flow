@@ -42,18 +42,22 @@ jobs:
         uses: actions/github-script@v5
         with:
           script: |
-            const issue_number = context.issue.number;
-            const body = process.env.CRITICAL_ISSUE_FOUND === 'true' ?
-              'Block - Critical vulnerabilities found.' :
-              'Successful - No critical vulnerabilities found.';
-            github.rest.issues.createComment({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
+            const issue_number = github.context.issue.number || github.context.payload.pull_request?.number;
+            if (!issue_number) {
+              console.log('No issue or pull request number found. Skipping comment posting.');
+              return;
+            }
+            await github.rest.issues.createComment({
+              owner: github.context.repo.owner,
+              repo: github.context.repo.repo,
               issue_number: issue_number,
-              body: body
+              body: process.env.CRITICAL_ISSUE_FOUND === 'true' ? 
+                    'Block - Critical vulnerabilities found.' : 
+                    'Successful - No critical vulnerabilities found.'
             });
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CRITICAL_ISSUE_FOUND: ${{ steps.bandit.outputs.CRITICAL_ISSUE_FOUND }}
 
       - name: Auto-merge PR if no vulnerabilities found
         if: env.CRITICAL_ISSUE_FOUND == 'false'
