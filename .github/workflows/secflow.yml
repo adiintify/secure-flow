@@ -99,6 +99,7 @@ jobs:
           path: sbom.json
 
   source:
+    needs: [scan, sbom]
     runs-on: ubuntu-latest
 
     steps:
