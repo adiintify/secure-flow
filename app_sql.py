@@ -3,14 +3,15 @@ import sqlite3
 
 app = Flask(__name__)
 
+# WARNING: This route is vulnerable to SQL Injection
 @app.route('/search', methods=['GET'])
 def search():
     user_input = request.args.get('name')
-    # Secure query using parameterized statements
-    query = "SELECT * FROM users WHERE name = ?"
+    # Vulnerable query
+    query = f"SELECT * FROM users WHERE name = '{user_input}'"
     conn = sqlite3.connect('database.db')
     cursor = conn.cursor()
-    cursor.execute(query, (user_input,))
+    cursor.execute(query)
     result = cursor.fetchall()
     return jsonify(result)
 
