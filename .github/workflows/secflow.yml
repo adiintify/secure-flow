@@ -24,11 +24,14 @@ jobs:
       - name: Run Bandit security scan
         id: bandit_scan
         run: |
-          bandit -r . -lll -o results.txt
+          bandit -r . -lll -o results.txt || true
           if grep -q 'Severity: HIGH' results.txt; then
            echo "ISSUE_FOUND=true" >> $GITHUB_ENV
           else
            echo "ISSUE_FOUND=false" >> $GITHUB_ENV
+
+      - name: Print Bandit results
+        run: cat results.txt
 
       - name: Comment 'Block' if critical issues are found
         if: env.ISSUE_FOUND == 'true'
