@@ -24,11 +24,7 @@ jobs:
       - name: Run Bandit
         id: bandit
         run: |
-          bandit -r . -o results.txt
-          if grep -q 'Severity: HIGH' results.txt; then
-           echo "CRITICAL_ISSUE_FOUND=true" >> $GITHUB_ENV
-          else
-           echo "CRITICAL_ISSUE_FOUND=false" >> $GITHUB_ENV
+          bandit -r . -lll -o results.txt || echo "::set-output name=CRITICAL_ISSUE_FOUND::true"
 
       - name: Print Bandit results
         run: cat results.txt
@@ -48,7 +44,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Auto-merge PR if no vulnerabilities found
-        if: steps.bandit.outputs.CRITICAL_ISSUE_FOUND == 'false'
+        if: steps.bandit.outputs.CRITICAL_ISSUE_FOUND != 'true'
         uses: pascalgn/automerge-action@v0.14.3
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
