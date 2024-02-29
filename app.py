@@ -5,7 +5,6 @@ app = Flask(__name__)
 
 # A simple route to deserialize data received over the network
 
-
 @app.route('/unpickle', methods=['POST'])
 def unpickle():
     data = request.data  # WARNING: This is unsafe!
