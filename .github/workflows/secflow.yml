@@ -6,6 +6,10 @@ on:
   push:
     branches: [main]
 
+permissions:
+  issues: write
+  pull-requests: write
+
 jobs:
   scan:
     runs-on: ubuntu-latest
