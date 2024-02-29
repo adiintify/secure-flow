@@ -1,4 +1,4 @@
-name: Security Scan and Merge
+name: Python Security Scan and PR Handling
 
 on:
   pull_request:
@@ -7,87 +7,79 @@ on:
     branches: [main]
 
 jobs:
-  security_scan:
-    name: Run Bandit Security Scan
+  bandit-security-scan:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v2
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v2
         with:
-          python-version: "3.8"
+          python-version: "3.x"
 
       - name: Install Bandit
         run: pip install bandit
 
-      - name: Run Bandit Security Scan
-        run: bandit -r . -lll --exit-zero
+      - name: Run Bandit security scan
         id: bandit_scan
-
-      - name: Check for Critical Vulnerabilities
-        id: check_vulns
         run: |
-          CRITICAL=$(bandit -r . -lll -f json | jq '.metrics._totals.CRITICAL')
-          echo "Critical vulnerabilities found: $CRITICAL"
-          echo "::set-output name=found::$CRITICAL"
+          bandit -r . -lll -o results.txt
+          if grep -q 'Severity: HIGH' results.txt; then
+           echo "ISSUE_FOUND=true" >> $GITHUB_ENV
+          else
+           echo "ISSUE_FOUND=false" >> $GITHUB_ENV
 
-      - name: Block PR if Critical Vulnerabilities Found
-        if: steps.check_vulns.outputs.found > 0
-        uses: actions/github-script@v6
+      - name: Comment 'Block' if critical issues are found
+        if: env.ISSUE_FOUND == 'true'
+        uses: actions/github-script@v5
         with:
-          github-token: ${{secrets.GITHUB_TOKEN}}
           script: |
-            github.issues.createComment({
-              issue_number: context.issue.number,
+            github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: 'Block: Critical vulnerabilities found.'
+              issue_number: context.issue.number,
+              body: 'Block - High vulnerability identified.'
             })
-            throw new Error('Blocking merge due to critical vulnerabilities.');
+            core.setFailed('Critical vulnerabilities found.')
 
-  auto_merge:
-    needs: security_scan
-    if: github.event_name == 'pull_request' && needs.security_scan.outputs.found == '0'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Auto-merge PR
-        uses: actions/github-script@v6
+      - name: Comment 'Successful' if no critical issues
+        if: env.ISSUE_FOUND == 'false'
+        uses: actions/github-script@v5
         with:
-          github-token: ${{secrets.GITHUB_TOKEN}}
           script: |
-            github.pulls.merge({
+            github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              pull_number: context.issue.number
-            })
-            github.issues.createComment({
               issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: 'Successful: No critical vulnerabilities found.'
+              body: 'Successful - No critical vulnerabilities found. This PR will be auto-merged shortly.'
             })
 
-  sbom_and_dependency_scan:
-    needs: [security_scan, auto_merge]
+      - name: Auto-Merge Pull Request
+        if: env.ISSUE_FOUND == 'false'
+        uses: repo-sync/github-sync@v2
+        with:
+          source_repo: ${{ github.repository }}
+          destination_branch: main
+          github_token: ${{ secrets.GITHUB_TOKEN }}
+          source_branch: ${{ github.head_ref }}
+
+  sbom-and-dependency-reporting:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: bandit-security-scan
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
-
-      - name: Set up Python
-        uses: actions/setup-python@v4
-        with:
-          python-version: "3.8"
+        uses: actions/checkout@v2
 
       - name: Generate SBOM
-        run: |
-          pip install syft
-          syft packages dir:/path/to/project -o cyclonedx-json > sbom.json
+        run: echo "SBOM generation step"
 
-      - name: Perform Dependency Scanning
-        run: |
-          # Use a dependency scanning tool or service here
-          echo "Dependency scanning logic goes here"
+      - name: Dependency Scanning
+        run: echo "Dependency scanning step"
+
+      - name: Upload SBOM as an artifact
+        uses: actions/upload-artifact@v2
+        with:
+          name: SBOM
+          path: path/to/your-sbom-file
