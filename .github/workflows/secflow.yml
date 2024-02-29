@@ -1,93 +1,79 @@
-name: Security Scan and Merge
+name: PR Workflow
 
 on:
   pull_request:
-    branches: [main]
-  push:
-    branches: [main]
+    types: [opened, synchronize, reopened]
 
 jobs:
-  security_scan:
-    name: Run Bandit Security Scan
+  scan:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v2
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v2
         with:
-          python-version: '3.8'
+          python-version: 3.8
 
-      - name: Install Bandit
-        run: pip install bandit
-
-      - name: Run Bandit Security Scan
-        run: bandit -r . -lll --exit-zero
-        id: bandit_scan
-
-      - name: Check for Critical Vulnerabilities
-        id: check_vulns
+      - name: Install dependencies
         run: |
-          CRITICAL=$(bandit -r . -lll -f json | jq '.metrics._totals.CRITICAL')
-          echo "Critical vulnerabilities found: $CRITICAL"
-          echo "::set-output name=found::$CRITICAL"
+          python -m pip install --upgrade pip
+          pip install bandit
 
-      - name: Block PR if Critical Vulnerabilities Found
-        if: steps.check_vulns.outputs.found > 0
-        uses: actions/github-script@v6
+      - name: Run Bandit
+        id: bandit
+        run: |
+          bandit -r . -lll -o results.txt || echo "::set-output name=CRITICAL_ISSUE_FOUND::true"
+
+      - name: Print Bandit results
+        run: cat results.txt
+
+      - name: Block PR if vulnerabilities found
+        if: steps.bandit.outputs.CRITICAL_ISSUE_FOUND == 'true'
+        uses: actions/github-script@v5
         with:
-          github-token: ${{secrets.GITHUB_TOKEN}}
           script: |
-            github.issues.createComment({
+            github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: 'Block: Critical vulnerabilities found.'
+              body: 'Block'
             })
-            throw new Error('Blocking merge due to critical vulnerabilities.');
 
-  auto_merge:
-    needs: security_scan
-    if: github.event_name == 'pull_request' && needs.security_scan.outputs.found == '0'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Auto-merge PR
-        uses: actions/github-script@v6
+      - name: Auto-merge PR if no vulnerabilities found
+        if: steps.bandit.outputs.CRITICAL_ISSUE_FOUND != 'true'
+        uses: pascalgn/automerge-action@v0.14.3
         with:
-          github-token: ${{secrets.GITHUB_TOKEN}}
-          script: |
-            github.pulls.merge({
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              pull_number: context.issue.number
-            })
-            github.issues.createComment({
-              issue_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              body: 'Successful: No critical vulnerabilities found.'
-            })
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          merge-method: merge
+          comment: "Successful"
 
-  sbom_and_dependency_scan:
-    needs: [security_scan, auto_merge]
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+  sbom:
+    needs: scan
     runs-on: ubuntu-latest
+    if: github.event.pull_request.merged == true
+
     steps:
       - name: Checkout code
-        uses: actions/checkout@v3
+        uses: actions/checkout@v2
 
       - name: Set up Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v2
         with:
-          python-version: '3.8'
+          python-version: 3.8
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install cyclonedx-bom
 
       - name: Generate SBOM
-        run: |
-          pip install syft
-          syft packages dir:/path/to/project -o cyclonedx-json > sbom.json
+        run: cyclonedx-py -i requirements.txt -o bom.xml
 
-      - name: Perform Dependency Scanning
-        run: |
-          # Use a dependency scanning tool or service here
-          echo "Dependency scanning logic goes here"
+      - name: Archive SBOM
+        uses: actions/upload-artifact@v2
+        with:
+          name: SBOM
+          path: bom.xml
