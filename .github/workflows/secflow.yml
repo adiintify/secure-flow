@@ -1,8 +1,8 @@
-name: PR Workflow
-
 # on:
 #   pull_request:
 #     types: [opened, synchronize, reopened]
+
+name: PR Workflow
 
 on:
   pull_request:
@@ -24,43 +24,49 @@ jobs:
           python-version: 3.8
 
       - name: Install dependencies
-        run: |
-          pip install bandit
+        run: pip install bandit
 
       - name: Run Bandit
         id: bandit
         run: |
-          bandit -r . -lll -o results.txt || echo "::set-output name=CRITICAL_ISSUE_FOUND::true"
+          if bandit -r . -lll -o results.txt; then
+            echo "CRITICAL_ISSUE_FOUND=false" >> $GITHUB_ENV
+          else
+            echo "CRITICAL_ISSUE_FOUND=true" >> $GITHUB_ENV
+          fi
 
       - name: Print Bandit results
         run: cat results.txt
 
-      - name: Block PR if vulnerabilities found
-        if: steps.bandit.outputs.CRITICAL_ISSUE_FOUND == 'true'
+      - name: Comment on PR based on scan result
         uses: actions/github-script@v5
         with:
           script: |
+            const issue_number = context.issue.number;
+            const body = process.env.CRITICAL_ISSUE_FOUND === 'true' ?
+              'Block - Critical vulnerabilities found.' :
+              'Successful - No critical vulnerabilities found.';
             github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body: 'Successful - No critical vulnerabilities found.'
-            })
+              issue_number: issue_number,
+              body: body
+            });
         env:
-          GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Auto-merge PR if no vulnerabilities found
-        if: steps.bandit.outputs.CRITICAL_ISSUE_FOUND != 'true'
+        if: env.CRITICAL_ISSUE_FOUND == 'false'
         uses: pascalgn/automerge-action@v0.14.3
         with:
-          github-token: ${{secrets.GITHUB_TOKEN}}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
           merge-method: merge
-          comment: "Successful"
+          comment: "Auto-merging PR as no critical vulnerabilities were identified."
 
   sbom:
     needs: scan
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
-    if: github.event.pull_request.merged == true
 
     steps:
       - name: Checkout code
