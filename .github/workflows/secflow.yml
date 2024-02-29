@@ -42,14 +42,14 @@ jobs:
         uses: actions/github-script@v5
         with:
           script: |
-            const issue_number = github.context.issue.number || github.context.payload.pull_request?.number;
+            const issue_number = context.issue.number || context.payload.pull_request?.number;
             if (!issue_number) {
               console.log('No issue or pull request number found. Skipping comment posting.');
-              return;
+              return
             }
             await github.rest.issues.createComment({
-              owner: github.context.repo.owner,
-              repo: github.context.repo.repo,
+              owner: context.repo.owner,
+              repo: context.repo.repo,
               issue_number: issue_number,
               body: process.env.CRITICAL_ISSUE_FOUND === 'true' ? 
                     'Block - Critical vulnerabilities found.' : 
