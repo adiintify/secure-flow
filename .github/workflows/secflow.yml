@@ -11,7 +11,7 @@ permissions:
   pull-requests: write
 
 jobs:
-  scan:
+  bandit:
     runs-on: ubuntu-latest
 
     steps:
@@ -68,7 +68,7 @@ jobs:
           comment: "Auto-merging PR as no critical vulnerabilities were identified."
 
   sbom:
-    needs: scan
+    needs: bandit
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
 
@@ -98,8 +98,8 @@ jobs:
           name: SBOM
           path: sbom.json
 
-  source:
-    needs: [scan, sbom]
+  report:
+    needs: [bandit, sbom]
     runs-on: ubuntu-latest
 
     steps:
