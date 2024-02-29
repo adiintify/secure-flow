@@ -35,17 +35,11 @@ jobs:
         uses: actions/github-script@v5
         with:
           script: |
-            github.issues.createComment({
+            github.rest.issues.createComment({
               issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
               body: 'Block'
-            })
-            github.pulls.update({
-              pull_number: context.issue.number,
-              owner: context.repo.owner,
-              repo: context.repo.repo,
-              state: 'closed'
             })
 
       - name: Auto-merge PR if no vulnerabilities found
