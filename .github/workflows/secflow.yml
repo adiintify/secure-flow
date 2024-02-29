@@ -24,25 +24,31 @@ jobs:
       - name: Run Bandit
         id: bandit
         run: |
-          bandit -r . -lll -o results.txt || echo "::set-output name=CRITICAL_ISSUE_FOUND::true"
+          bandit -r . -lll -o results.txt
+          if grep -q 'Severity: HIGH' results.txt; then
+           echo "CRITICAL_ISSUE_FOUND=true" >> $GITHUB_ENV
+          else
+           echo "CRITICAL_ISSUE_FOUND=false" >> $GITHUB_ENV
 
       - name: Print Bandit results
         run: cat results.txt
 
       - name: Block PR if vulnerabilities found
         if: steps.bandit.outputs.CRITICAL_ISSUE_FOUND == 'true'
-        uses: actions/github-script@v6
+        uses: actions/github-script@v5
         with:
           script: |
             github.rest.issues.createComment({
-              issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              body: 'Block'
+              issue_number: context.issue.number,
+              body: 'Successful - No critical vulnerabilities found.'
             })
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Auto-merge PR if no vulnerabilities found
-        if: steps.bandit.outputs.CRITICAL_ISSUE_FOUND != 'true'
+        if: steps.bandit.outputs.CRITICAL_ISSUE_FOUND == 'false'
         uses: pascalgn/automerge-action@v0.14.3
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
