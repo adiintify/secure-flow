@@ -13,6 +13,7 @@ def fetch_alerts(username, repo, token):
     url = f'https://api.github.com/repos/{username}/{repo}/code-scanning/alerts'
     with requests.get(url, headers=headers) as response:
         alerts = response.json()
+        print(f"Fetched Alerts are: {alerts}")
 
     return [alert for alert in alerts if alert['rule']['security_severity_level'].lower() in {'high', 'critical'}]
 
@@ -37,6 +38,8 @@ def main():
     token = os.environ['NETSKOPE']
 
     high_severity_alerts = fetch_alerts(username, repo, token)
+
+    print(f"High Severity Alerts are: {high_severity_alerts}")
 
     processed_cwe_ids = set()
 
