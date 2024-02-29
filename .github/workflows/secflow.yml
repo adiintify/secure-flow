@@ -1,14 +1,13 @@
-name: Python Security Scan and PR Handling
+name: PR Workflow
 
 on:
   pull_request:
-    branches: [main]
-  push:
-    branches: [main]
+    types: [opened, synchronize, reopened]
 
 jobs:
-  bandit-security-scan:
+  scan:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
@@ -16,73 +15,71 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v2
         with:
-          python-version: "3.x"
+          python-version: 3.8
 
-      - name: Install Bandit
-        run: pip install bandit
-
-      - name: Run Bandit security scan
-        id: bandit_scan
+      - name: Install dependencies
         run: |
-          bandit -r . -lll -o results.txt || true
-          if grep -q 'Severity: HIGH' results.txt; then
-           echo "ISSUE_FOUND=true" >> $GITHUB_ENV
-          else
-           echo "ISSUE_FOUND=false" >> $GITHUB_ENV
+          python -m pip install --upgrade pip
+          pip install bandit
+
+      - name: Run Bandit
+        id: bandit
+        run: |
+          bandit -r . -lll -o results.txt || echo "::set-output name=CRITICAL_ISSUE_FOUND::true"
 
       - name: Print Bandit results
         run: cat results.txt
 
-      - name: Comment 'Block' if critical issues are found
-        if: env.ISSUE_FOUND == 'true'
+      - name: Block PR if vulnerabilities found
+        if: steps.bandit.outputs.CRITICAL_ISSUE_FOUND == 'true'
         uses: actions/github-script@v5
         with:
           script: |
-            github.rest.issues.createComment({
+            github.issues.createComment({
+              issue_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body: 'Block - High vulnerability identified.'
+              body: 'Block'
             })
-            core.setFailed('Critical vulnerabilities found.')
-
-      - name: Comment 'Successful' if no critical issues
-        if: env.ISSUE_FOUND == 'false'
-        uses: actions/github-script@v5
-        with:
-          script: |
-            github.rest.issues.createComment({
+            github.pulls.update({
+              pull_number: context.issue.number,
               owner: context.repo.owner,
               repo: context.repo.repo,
-              issue_number: context.issue.number,
-              body: 'Successful - No critical vulnerabilities found. This PR will be auto-merged shortly.'
+              state: 'closed'
             })
 
-      - name: Auto-Merge Pull Request
-        if: env.ISSUE_FOUND == 'false'
-        uses: repo-sync/github-sync@v2
+      - name: Auto-merge PR if no vulnerabilities found
+        if: steps.bandit.outputs.CRITICAL_ISSUE_FOUND != 'true'
+        uses: pascalgn/automerge-action@v0.14.3
         with:
-          source_repo: ${{ github.repository }}
-          destination_branch: main
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          source_branch: ${{ github.head_ref }}
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          merge-method: merge
+          comment: "Successful"
 
-  sbom-and-dependency-reporting:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: bandit-security-scan
+  sbom:
+    needs: scan
     runs-on: ubuntu-latest
+    if: github.event.pull_request.merged == true
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v2
 
+      - name: Set up Python
+        uses: actions/setup-python@v2
+        with:
+          python-version: 3.8
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install cyclonedx-bom
+
       - name: Generate SBOM
-        run: echo "SBOM generation step"
+        run: cyclonedx-py -i requirements.txt -o bom.xml
 
-      - name: Dependency Scanning
-        run: echo "Dependency scanning step"
-
-      - name: Upload SBOM as an artifact
+      - name: Archive SBOM
         uses: actions/upload-artifact@v2
         with:
           name: SBOM
-          path: path/to/your-sbom-file
+          path: bom.xml
