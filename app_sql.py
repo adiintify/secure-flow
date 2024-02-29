@@ -4,6 +4,8 @@ import sqlite3
 app = Flask(__name__)
 
 # WARNING: This route is vulnerable to SQL Injection
+
+
 @app.route('/search', methods=['GET'])
 def search():
     user_input = request.args.get('name')
@@ -14,6 +16,7 @@ def search():
     cursor.execute(query)
     result = cursor.fetchall()
     return jsonify(result)
+
 
 if __name__ == '__main__':
     app.run(debug=True)
