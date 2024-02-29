@@ -26,9 +26,6 @@ jobs:
         run: |
           bandit -r . -lll -o results.txt || echo "::set-output name=CRITICAL_ISSUE_FOUND::true"
 
-      - name: Print Bandit results
-        run: cat results.txt
-
       - name: Block PR if vulnerabilities found
         if: steps.bandit.outputs.CRITICAL_ISSUE_FOUND == 'true'
         uses: actions/github-script@v5
@@ -41,13 +38,13 @@ jobs:
               body: 'Successful - No critical vulnerabilities found.'
             })
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
 
       - name: Auto-merge PR if no vulnerabilities found
         if: steps.bandit.outputs.CRITICAL_ISSUE_FOUND != 'true'
         uses: pascalgn/automerge-action@v0.14.3
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{secrets.GITHUB_TOKEN}}
           merge-method: merge
           comment: "Successful"
 
