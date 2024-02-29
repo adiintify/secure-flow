@@ -1,8 +1,14 @@
 name: PR Workflow
 
+# on:
+#   pull_request:
+#     types: [opened, synchronize, reopened]
+
 on:
   pull_request:
-    types: [opened, synchronize, reopened]
+    branches: [main]
+  push:
+    branches: [main]
 
 jobs:
   scan:
@@ -41,13 +47,13 @@ jobs:
               body: 'Successful - No critical vulnerabilities found.'
             })
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_TOKEN: ${{secrets.GITHUB_TOKEN}}
 
       - name: Auto-merge PR if no vulnerabilities found
         if: steps.bandit.outputs.CRITICAL_ISSUE_FOUND != 'true'
         uses: pascalgn/automerge-action@v0.14.3
         with:
-          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-token: ${{secrets.GITHUB_TOKEN}}
           merge-method: merge
           comment: "Successful"
 
