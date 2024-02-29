@@ -24,7 +24,7 @@ jobs:
       - name: Run Bandit
         id: bandit
         run: |
-          bandit -r . -lll -o results.txt
+          bandit -r . -o results.txt
           if grep -q 'Severity: HIGH' results.txt; then
            echo "CRITICAL_ISSUE_FOUND=true" >> $GITHUB_ENV
           else
